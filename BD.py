@@ -117,6 +117,7 @@ class BD(QWidget):
             
 
 
+    #teste
     
     def change_cell_motor(self,row,column):
         #print(self.ui.tableWidget.model().index(row,column).data())
