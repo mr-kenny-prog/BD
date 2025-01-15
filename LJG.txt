@@ -1,0 +1,9 @@
+from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
+
+
+
+
+
+self.openGLWidget = gl.GLViewWidget()
