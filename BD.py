@@ -20,6 +20,69 @@ sys.path.insert(1, './ui_files')
 from ui_BD import Ui_BD
 
 class BD(QWidget):
+
+    def save_robots_table(self, path, format):
+        Robots = pd.read_csv('Robots.csv', index_col=[0,1,2])
+        if (format == '.csv'):
+            Robots.to_csv(fr'{path}Robots.csv',index=True)
+        if (format == '.xlsx'):
+            Robots.to_excel(fr'{path}Robots.xlsx',index=True)
+
+    def calculate_parts(self):
+        Robot_characteristics = pd.read_csv('Robot_parts_characteristic.csv', index_col=0)
+        motors = pd.read_csv('motors.csv', index_col=[0,1])
+        pneumatic = pd.read_csv('pneumatic.csv', index_col=[0,1])
+        price = pd.read_csv('price.csv', index_col=[0,1])
+        pressure = np.array(pneumatic['Давление'])
+        height = np.array(pneumatic['Рабочий_ход'])
+        diamtr = np.array(pneumatic['Диаметр'])
+        accelerate = pressure * np.pi * diamtr**2 / 0.4 / 1000
+        velocity = np.sqrt(accelerate * height / 2)
+        Robots = pd.DataFrame()
+        #delta = np.sqrt((Robot_characteristics['Ускорение Пневмоцилиндра'][0] - accelerate)**2 + (Robot_characteristics['Скорость Пневмоцилиндра'][0]- velocity)**2)
+        for i in range(len(list(Robot_characteristics['Ускорение Пневмоцилиндра']))): 
+            #определение подходящего пневмоцилиндра 
+            delta = []
+            delta = np.sqrt((list(Robot_characteristics['Ускорение Пневмоцилиндра'])[i] - accelerate)**2 + (list(Robot_characteristics['Скорость Пневмоцилиндра'])[i]- velocity)**2)
+            robot_pneumatic = pneumatic[pneumatic.index == list(pneumatic.index)[np.array(delta).argmin()]]
+            
+            #определение подходящего мотора на колёса 
+            moment_on_wheel = list(Robot_characteristics['Момент на Ведущие колёса'])[i] / 4
+            raw_motors_on_wheel = motors[(motors['Момент'] > f'{moment_on_wheel}')]
+            motors_on_wheel = raw_motors_on_wheel[raw_motors_on_wheel['Момент'] == np.array(raw_motors_on_wheel['Момент']).min()]
+            
+            #определение подходящего мотора на колёса 
+            moment_on_disk = list(Robot_characteristics['Момент на Раздвижение'])[i]
+            raw_motors_on_disk = motors[(motors['Момент'] > f'{moment_on_disk}')]
+            motors_on_disk = raw_motors_on_disk[raw_motors_on_disk['Момент'] == np.array(raw_motors_on_disk['Момент']).min()]
+            
+            motors_on_wheel = pd.concat([motors_on_wheel, pd.DataFrame(data = {'Стоимость' : []})], axis=1, join='outer') if list(pd.concat([motors_on_wheel,price], axis=1, join='inner').index) == [] else pd.concat([motors_on_wheel,price], axis=1, join='inner')
+            motors_on_disk = pd.concat([motors_on_disk, pd.DataFrame(data = {'Стоимость' : []})], axis=1, join='outer') if list(pd.concat([motors_on_disk,price], axis=1, join='inner').index) == [] else pd.concat([motors_on_disk,price], axis=1, join='inner')
+            robot_pneumatic = pd.concat([robot_pneumatic, pd.DataFrame(data = {'Стоимость' : []})], axis=1, join='outer') if list(pd.concat([robot_pneumatic,price], axis=1, join='inner').index) == [] else pd.concat([robot_pneumatic,price], axis=1, join='inner')
+            robot_pneumatic = pd.concat([robot_pneumatic, pd.DataFrame(data = {'Тип_двигателя' : []})], axis=1, join='outer')
+            robot_pneumatic.iat[0,4] = 'Пневмоцилиндр'
+
+            robot_pneumatic = pd.concat([robot_pneumatic, pd.DataFrame(data = {'Модель робота' : []})], axis=1, join='outer')
+            robot_pneumatic.iat[0,5] = list(Robot_characteristics.index)[i] 
+
+            
+            motors_on_wheel = pd.concat([motors_on_wheel, pd.DataFrame(data = {'Модель робота' : []})], axis=1, join='outer')
+            motors_on_wheel.iat[0,6] = list(Robot_characteristics.index)[i] 
+
+            motors_on_disk = pd.concat([motors_on_disk, pd.DataFrame(data = {'Модель робота' : []})], axis=1, join='outer')
+            motors_on_disk.iat[0,6] = list(Robot_characteristics.index)[i] 
+
+            robot_parts = pd.concat([motors_on_disk, motors_on_wheel, robot_pneumatic])
+            robot_parts.index.names = ['Производитель', 'Модель']
+            robot_parts.reset_index('Производитель')
+            robot_parts.reset_index(drop=False, inplace=True)
+            robot_parts.set_index(['Модель робота','Производитель', 'Модель'], inplace=True)
+            Robots = pd.concat([Robots,robot_parts])
+        print(Robots)
+        Robots.to_csv(f'Robots.csv',index=True)
+        self.reload_table('Robots',self.ui.tableWidget_4,'')
+        self.ui.tableWidget_4.verticalHeader().setVisible(False)
+
     def Add_string(self,idx):
         if (idx == 1):
             motors = pd.read_csv('motors.csv',index_col=[0,1])
@@ -177,7 +240,8 @@ class BD(QWidget):
         self.ui.tableWidget.cellChanged.connect(self.change_cell_motor)
         self.ui.tableWidget_2.cellChanged.connect(self.change_cell_pneumatic)
         self.ui.tableWidget_3.cellChanged.connect(self.change_cell_price)
-
         self.ui.add_1.clicked.connect(lambda: self.Add_string(1))
         self.ui.add_2.clicked.connect(lambda: self.Add_string(2))
         self.ui.add_3.clicked.connect(lambda: self.Add_string(3))
+        self.ui.calculate_table_4.clicked.connect(self.calculate_parts)
+        self.ui.upload_table_4.clicked.connect(lambda: self.save_robots_table(self.ui.way_save_4.text(),self.ui.comboBox_3.currentText()))
